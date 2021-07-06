@@ -15,11 +15,11 @@ class Producer final
 // types
 // data
 private:
-	Key					id_;
+	const Key			id_bound_;
 	Queue<Key, Value>*	queue_{nullptr};
 	std::atomic<bool>	running_{false};
 	std::future<void>	fut_;
-	std::chrono::steady_clock::duration period_{1ms};
+	const size_t		period_{1000};
 
 // methods
 private:
@@ -28,17 +28,21 @@ private:
 	// might delay stopping for period_, but for test should be ok
 	void _run()
 	{
+		Key id{0};
 		while (running_)
 		{
-			queue_->Enqueue(id_, Value{});
-			std::this_thread::sleep_for(period_);
+			for (int i = 0; i != period_; ++i)	// to wait some time
+			{
+				id = (id + 1) % id_bound_;
+			}
+			queue_->Enqueue(id, Value{});
 		}
 	}
 
 public:
 	//----------------------------------------------------------------------------------------------------------
-	Producer(Key id, std::chrono::steady_clock::duration period)
-		: id_{std::move(id)}
+	Producer(Key id_bound, size_t period)
+		: id_bound_{std::move(id_bound)}
 		, period_{period}
 	{}
 	//----------------------------------------------------------------------------------------------------------

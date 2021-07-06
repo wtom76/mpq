@@ -9,75 +9,71 @@
 #include "IConsumer.h"
 
 //----------------------------------------------------------------------------------------------------------
-// class Mqp
+// class MqpS
 //----------------------------------------------------------------------------------------------------------
 template<typename Key, typename Value, size_t max_capacity = 1000>
-class Mqp
+class MqpS
 {
 // types
-private:
-	//----------------------------------------------------------------------------------------------------------
-	// struct ConsumerQueue
-	//----------------------------------------------------------------------------------------------------------
-	struct ConsumerQueue
-	{
-		IConsumer<Key, Value>*	consumer_{nullptr};
-		std::deque<Value>		queue_;
-
-		ConsumerQueue() = default;
-		ConsumerQueue(IConsumer<Key, Value>* consumer)
-			: consumer_{consumer}
-		{}
-		void process_queue(const Key& id)
-		{
-			assert(consumer_);
-			for (const Value& val : queue_)
-			{
-				consumer_->Consume(id, val);
-			}
-			queue_.clear();
-		}
-	};
-
 // data
 private:
-	std::unordered_map<Key, ConsumerQueue>	queues_;
-	std::atomic<bool>		running_{false};
-	std::mutex				mtx_;
-	std::condition_variable cv_;
-	std::future<void>		fut_;
+	std::atomic<bool>								running_{false};
+	std::future<void>								fut_;
+	//
+	std::mutex										queue_mtx_;
+	std::condition_variable							queue_cv_;
+	std::deque<std::pair<Key, Value>>				queue_;
+	//
+	std::mutex										cons_mtx_;
+	std::unordered_map<Key, IConsumer<Key, Value>*>	consumers_;
+	//
 
-	size_t					msg_processed_{0}; // temp
-	size_t					msg_lost_{0}; // temp
+	size_t											msg_processed_{0}; // temp
+	size_t											msg_lost_{0}; // temp
+
 // methods
 private:
 	//----------------------------------------------------------------------------------------------------------
 	void _run()
 	{
+		std::deque<std::pair<Key, Value>> to_process;
+
 		while (running_)
 		{
-			std::unique_lock<std::mutex> lock{mtx_};
-			cv_.wait(lock);
-			// spurious wakes should be ok here - just process queues
-			if (!running_)
+			// queue_mtx_ guarded
 			{
-				return;
-			}
+				std::unique_lock<std::mutex> lock{queue_mtx_};
+				queue_cv_.wait(lock);
+				// spurious wakes should be ok here - just process queue
 
-			for (auto& q_pr : queues_)
-			{
-				if (q_pr.second.consumer_)
+				if (!running_)
 				{
-					msg_processed_ += q_pr.second.queue_.size();
-					q_pr.second.process_queue(q_pr.first);
+					return;
+				}
+
+				assert(to_process.empty());
+				to_process.swap(queue_);
+			}
+			msg_processed_ += to_process.size();
+			// queue_mtx_ free
+			{
+				std::unique_lock<std::mutex> lock{cons_mtx_};
+				
+				for (const auto& msg : to_process)
+				{
+					if (const auto cons_i{consumers_.find(msg.first)}; cons_i != consumers_.cend())
+					{
+						cons_i->second->Consume(msg.first, msg.second);
+					}
 				}
 			}
+			to_process.clear();
 		}
 	}
 
 public:
 	//----------------------------------------------------------------------------------------------------------
-	~Mqp()
+	~MqpS()
 	{
 		try
 		{
@@ -101,7 +97,7 @@ public:
 	void StopProcessing()
 	{
 		running_ = false;
-		cv_.notify_one();
+		queue_cv_.notify_one();
 		if (fut_.valid())
 		{
 			fut_.get();
@@ -110,50 +106,38 @@ public:
 	//----------------------------------------------------------------------------------------------------------
 	void Subscribe(const Key& id, IConsumer<Key, Value>* consumer)
 	{
-		std::lock_guard<std::mutex> lock{mtx_};
-		ConsumerQueue& cq{queues_[id]};
-		if (!cq.consumer_)
-		{
-			cq.consumer_ = consumer;
-			cv_.notify_one();
-		}
+		std::lock_guard<std::mutex> lock{cons_mtx_};
+		consumers_.try_emplace(id, consumer);
 	}
 	//----------------------------------------------------------------------------------------------------------
 	void Unsubscribe(const Key& id)
 	{
-		std::lock_guard<std::mutex> lock{mtx_};
-		queues_.erase(id);
+		std::lock_guard<std::mutex> lock{cons_mtx_};
+		consumers_.erase(id);
 	}
 	//----------------------------------------------------------------------------------------------------------
 	bool Enqueue(const Key& id, Value value)
 	{
-		std::lock_guard<std::mutex> lock{mtx_};
-		ConsumerQueue& cq{queues_[id]};
-		if (cq.queue_.size() >= max_capacity)
+		std::lock_guard<std::mutex> lock{queue_mtx_};
+		if (queue_.size() >= max_capacity)
 		{
 			// also might wait for queue-not-full-cv
 			++msg_lost_;
 			return false;
 		}
-		cq.queue_.emplace_back(std::move(value));
-		cv_.notify_one();
+		queue_.emplace_back(id, std::move(value));
+		queue_cv_.notify_one();
 		return true;
 	}
 	//----------------------------------------------------------------------------------------------------------
 	// temp
 	void dump()
 	{
-		std::lock_guard<std::mutex> lock{mtx_};
-		std::cout << "id\tqueue size\n";
-		for (auto& q_pr : queues_)
-		{
-			if (!q_pr.second.queue_.empty())
-			{
-				std::cout << q_pr.first << '\t' << q_pr.second.queue_.size() << '\n';
-			}
-		}
+		std::lock_guard<std::mutex> lock{queue_mtx_};
 		std::cout
-			<< "msg processed: " << msg_processed_ << std::endl
-			<< "msg lost: " << msg_lost_ << std::endl;
+			<< "msg enqueued: " << queue_.size()
+			<< "\nmsg processed: " << msg_processed_
+			<< "\nmsg lost: " << msg_lost_
+			<< std::endl;
 	};
 };

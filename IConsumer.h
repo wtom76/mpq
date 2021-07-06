@@ -1,16 +1,14 @@
 #pragma once
-#include "IConsumer.h"
 
 //----------------------------------------------------------------------------------------------------------
 // class IConsumer
 //----------------------------------------------------------------------------------------------------------
 template<typename Key, typename Value>
-class Consumer
-	: public IConsumer<Key, Value>
+class IConsumer
 {
 public:
-	void Consume([[maybe_unused]] Key id, [[maybe_unused]] const Value& value) override
-	{
-//		std::this_thread::sleep_for(1ns);
-	}
+	virtual ~IConsumer(){}
+
+	// is id really nesessary here?
+	virtual void Consume(Key id, const Value& value) = 0;
 };

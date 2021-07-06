@@ -20,7 +20,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Consumer.hpp" />
+    <ClInclude Include="IConsumer.h" />
     <ClInclude Include="Mqp.hpp" />
+    <ClInclude Include="MqpS.hpp" />
     <ClInclude Include="Producer.hpp" />
   </ItemGroup>
   <ItemGroup>

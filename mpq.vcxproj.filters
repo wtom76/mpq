@@ -4,6 +4,8 @@
     <ClInclude Include="Consumer.hpp" />
     <ClInclude Include="Mqp.hpp" />
     <ClInclude Include="Producer.hpp" />
+    <ClInclude Include="MqpS.hpp" />
+    <ClInclude Include="IConsumer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
