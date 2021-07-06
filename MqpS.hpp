@@ -22,7 +22,7 @@ private:
 	//
 	std::mutex										queue_mtx_;
 	std::condition_variable							queue_cv_;
-	std::deque<std::pair<Key, Value>>				queue_;
+	std::list<std::pair<Key, Value>>				queue_;
 	//
 	std::mutex										cons_mtx_;
 	std::unordered_map<Key, IConsumer<Key, Value>*>	consumers_;
@@ -36,7 +36,7 @@ private:
 	//----------------------------------------------------------------------------------------------------------
 	void _run()
 	{
-		std::deque<std::pair<Key, Value>> to_process;
+		std::list<std::pair<Key, Value>> to_process;
 
 		while (running_)
 		{

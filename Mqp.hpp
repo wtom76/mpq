@@ -22,7 +22,7 @@ private:
 	struct ConsumerQueue
 	{
 		IConsumer<Key, Value>*	consumer_{nullptr};
-		std::deque<Value>		queue_;
+		std::list<Value>		queue_;
 
 		ConsumerQueue() = default;
 		ConsumerQueue(IConsumer<Key, Value>* consumer)

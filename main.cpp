@@ -19,8 +19,8 @@ void test()
 	using ConsumerT = Consumer<Key, Value>;
 
 	constexpr size_t queue_num{1'000'000};	// number of consumers
-	constexpr size_t prod_num{15};			// number of producers
-	constexpr size_t prod_period{1000};		// message creation delay ...ish
+	constexpr size_t prod_num{8};			// number of producers
+	constexpr size_t prod_period{500};		// message creation delay ...ish
 	constexpr auto run_time{10s};			// test run time
 
 	try
